@@ -23,16 +23,31 @@ async function main() {
     await profitHook.waitForDeployment();
     console.log("ProfitDistributionHook deployed to:", profitHook.target);
 
-    // Example: Send Ether to the hook to simulate profit distribution
-    const tx = await profitHook.didReceiveAttestation(
-        validAddress1,        // Attester (use validated address)
-        1,                    // Schema ID
-        1,                    // Attestation ID
-        ethers.toUtf8Bytes("Example extra data"),
-        { value: ethers.parseEther("0.001") }
-    );
-    await tx.wait();
-    console.log("Profit distributed successfully!");
+    // // Example: Send Ether to the hook to simulate profit distribution
+    // try {
+    //     const tx = await profitHook.didReceiveAttestation(
+    //         validAddress1,        // Attester
+    //         1,                    // Schema ID
+    //         1,                    // Attestation ID
+    //         ethers.AbiCoder.defaultAbiCoder().encode(
+    //             ["tuple(address requestorAddress, uint256 price, uint256 projectID)"],
+    //             [[
+    //                 validAddress1,
+    //                 1000n,  // Using BigInt for uint256
+    //                 1n
+    //             ]]
+    //         ),
+    //         { value: ethers.parseEther("0.001") }
+    //     );
+    //     console.log("Transaction sent:", tx.hash);
+    //     const receipt = await tx.wait();
+    //     console.log("Transaction confirmed:", receipt);
+    // } catch (error) {
+    //     console.error("Detailed error:", error);
+    //     if (error.data) {
+    //         console.error("Error data:", error.data);
+    //     }
+    // }
 }
 
 main().catch((error) => {

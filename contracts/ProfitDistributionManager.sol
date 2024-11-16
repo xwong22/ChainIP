@@ -17,26 +17,35 @@ contract ProfitDistributionManager is Ownable {
         contributors = newContributors;
     }
 
-    function distributeProfit() public payable {
+    function distributeProfit(uint256 value) public payable {
         uint256 totalContributors = contributors.length;
         require(totalContributors > 0, "No contributors to distribute profit.");
-        require(msg.value > 0, "No profit to distribute.");
+        require(value > 0, "No profit to distribute.");
 
-        uint256 individualShare = msg.value / totalContributors;
+        // convert to ether
+        // uint256 etherValue = value / 10**18;
+
+        uint256 individualShare = value / totalContributors;
         require(individualShare > 0, "Share amount too small");
 
         // Ensure total distribution doesn't exceed sent amount
-        require(individualShare * totalContributors <= msg.value, "Distribution calculation error");
+        require(individualShare * totalContributors <= value, "Distribution calculation error");
+
+        
 
         for (uint256 i = 0; i < totalContributors; i++) {
             require(contributors[i] != address(0), "Invalid contributor address");
             Address.sendValue(payable(contributors[i]), individualShare);
         }
 
-        emit ProfitDistributed(msg.value, individualShare);
+        emit ProfitDistributed(value, individualShare);
     }
 
     function getContributors() external view returns (address[] memory) {
         return contributors;
+    }
+
+    // Add receive function to automatically distribute profits when ETH is sent to contract
+    receive() external payable {
     }
 }

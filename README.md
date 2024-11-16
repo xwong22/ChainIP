@@ -1,13 +1,13 @@
-# Sample Hardhat Project
+# ChainIP Contracts
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+This is the repository for the ChainIP contracts.
 
-Try running some of the following tasks:
+## Getting Started
 
 ```shell
+npx hardhat node
 npx hardhat help
 npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.ts
+npx hardhat run scripts/deploy.js --network scroll-sepolia
+npx hardhat run scripts/deployProfitDistribution.js --network scroll-sepolia
 ```

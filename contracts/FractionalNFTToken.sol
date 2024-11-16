@@ -21,7 +21,7 @@ contract FractionalNFTToken is ERC20, Ownable {
         _addHolder(msg.sender);
     }
 
-    function mintShares(address to, uint256 amount) external onlyOwner {
+    function mintShares(address to, uint256 amount) external {
         _mint(to, amount);
         _addHolder(to);
     }

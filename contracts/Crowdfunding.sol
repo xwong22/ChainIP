@@ -18,6 +18,16 @@ contract Crowdfunding {
         // for selling the productNFT
         uint256 totalProductSupply;
         uint256 productPrice;
+
+
+        // Voting related
+        // bool votingStarted;
+        // uint256 votingDeadline;
+        // mapping(address => bool) hasVoted;  // Track who voted
+        // uint256 totalVotesSupply;  // Votes for supply changes
+        // uint256 totalVotesPrice;   // Votes for price changes
+        // uint256 proposedSupply;    // Proposed new supply
+        // uint256 proposedPrice;     // Proposed new price
     }
 
     mapping(uint256 => Campaign) public campaigns;
@@ -92,6 +102,9 @@ contract Crowdfunding {
             uint256 productNFTId = productNFT.mint(campaign.creator, "https://example.com/product-nft.json");
             campaign.productNFTId = productNFTId;
 
+            campaign.totalProductSupply = 1000;
+            campaign.productPrice = 1;
+
 
             // Fractionalize the ProductNFT
             uint256 nftTokenId = productNFT.getLastTokenId();  // Assuming you have a method to get the last minted NFT's ID
@@ -125,8 +138,18 @@ contract Crowdfunding {
         uint256 fractionalSupply = fractionalNFTToken.fractionalTotalSupply();
         require(fractionalSupply > 0, "No fractional tokens exist");
 
-        // Calculate earnings per token
-        uint256 earningsPerToken = campaign.productPrice / fractionalSupply;
+        // Example assuming product price is a human-readable value (in Ether)
+        require(fractionalSupply == 1000, "Fractional supply is not 1000");
+        require(campaign.productPrice == 1, "Product price is not 1");
+
+        // Convert product price to wei (1 Ether = 1e18 wei)
+        uint256 scaledProductPrice = campaign.productPrice * 1e18;  // 1 Ether becomes 1e18 wei
+
+        // Calculate earnings per token (ensure you're working with values in wei)
+        uint256 earningsPerToken = scaledProductPrice / fractionalSupply;
+
+        // Ensure earnings per token is greater than zero after scaling
+        require(earningsPerToken > 0, "Earnings per token must be greater than zero");
 
         // Get all token holders
         address[] memory holders = fractionalNFTToken.getHolders();
@@ -138,14 +161,24 @@ contract Crowdfunding {
 
             // Calculate the payout for the holder
             uint256 payout = holderBalance * earningsPerToken;
+            require(address(this).balance >= payout, "Insufficient funds in contract");
+
+
+            // Check for valid address and ensure payout is greater than zero
+            require(holder != address(0), "Invalid address");
+            require(payout > 0, "No earnings to transfer");
 
             // Transfer the payout
-            (bool success, ) = holder.call{value: payout}("");
-            require(success, "Earnings transfer failed");
+            // payable(holder).transfer(payout);
+            // Transfer the payout and check if it is successful
+            (bool success, ) = payable(holder).call{value: payout}("");
+            require(success, "Transfer failed");
+
         }
 
         // Emit event for purchase
         emit ProductPurchased(campaignId, msg.sender, amount, totalPrice);
+
     }
 
 
@@ -214,4 +247,68 @@ contract Crowdfunding {
         }
         return string(bstr);
     }
+
+
+    // // Voting related functions
+    // function startVoting(uint256 campaignId, uint256 votingDuration) external onlyCreator(campaignId) {
+    //     Campaign storage campaign = campaigns[campaignId];
+    //     require(campaign.finalized, "Campaign must be finalized");
+    //     require(!campaign.votingStarted, "Voting already started");
+
+    //     campaign.votingStarted = true;
+    //     campaign.votingDeadline = block.timestamp + votingDuration;
+
+    //     emit VotingStarted(campaignId, campaign.votingDeadline);
+    // }
+
+    // event VotingStarted(uint256 indexed campaignId, uint256 votingDeadline);
+
+    // function vote(uint256 campaignId, bool voteForSupplyIncrease, uint256 proposedSupply, uint256 proposedPrice) external {
+    //     Campaign storage campaign = campaigns[campaignId];
+    //     require(campaign.votingStarted, "Voting not started");
+    //     require(block.timestamp <= campaign.votingDeadline, "Voting has ended");
+    //     require(!campaign.hasVoted[msg.sender], "You have already voted");
+
+    //     campaign.hasVoted[msg.sender] = true;
+
+    //     // Vote on supply and price
+    //     if (voteForSupplyIncrease) {
+    //         campaign.totalVotesSupply += 1;
+    //         campaign.proposedSupply = proposedSupply;
+    //     }
+        
+    //     if (!voteForSupplyIncrease) {
+    //         campaign.totalVotesPrice += 1;
+    //         campaign.proposedPrice = proposedPrice;
+    //     }
+
+    //     emit Voted(campaignId, msg.sender, voteForSupplyIncrease, proposedSupply, proposedPrice);
+    // }
+
+    // event Voted(uint256 indexed campaignId, address indexed voter, bool voteForSupplyIncrease, uint256 proposedSupply, uint256 proposedPrice);
+
+    // function finalizeVoting(uint256 campaignId) external {
+    //     Campaign storage campaign = campaigns[campaignId];
+    //     require(campaign.votingStarted, "Voting has not started");
+    //     require(block.timestamp > campaign.votingDeadline, "Voting still ongoing");
+
+    //     bool majorityVotesSupply = campaign.totalVotesSupply > (campaignCount / 2);
+    //     bool majorityVotesPrice = campaign.totalVotesPrice > (campaignCount / 2);
+
+    //     // Apply the results of the voting
+    //     if (majorityVotesSupply) {
+    //         campaign.totalProductSupply = campaign.proposedSupply;
+    //     }
+    //     if (majorityVotesPrice) {
+    //         campaign.productPrice = campaign.proposedPrice;
+    //     }
+
+    //     campaign.votingStarted = false;  // End the voting process
+
+    //     emit VotingFinalized(campaignId, campaign.totalProductSupply, campaign.productPrice);
+    // }
+
+    // event VotingFinalized(uint256 indexed campaignId, uint256 newProductSupply, uint256 newProductPrice);
+
+
 }

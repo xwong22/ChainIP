@@ -8,6 +8,10 @@ import "./FractionalNFTManager.sol";
 contract Crowdfunding {
     struct Campaign {
         address creator;
+        string creatorName;
+        string twitterHandle;
+        string projectName;
+        string projectDescription;
         uint256 targetAmount;
         uint256 currentAmount;
         uint256 deadline;
@@ -42,7 +46,15 @@ contract Crowdfunding {
         fractionalNFTManager = FractionalNFTManager(_fractionalNFTManagerAddress);
     }
 
-    event CampaignInitialized(uint256 campaignId, address indexed creator, uint256 targetAmount, uint256 deadline);
+    event CampaignInitialized(
+        uint256 campaignId, 
+        address indexed creator, 
+        string creatorName,
+        string twitterHandle,
+        string projectName,
+        uint256 targetAmount, 
+        uint256 deadline
+    );
     event ContributionMade(uint256 campaignId, address indexed contributor, uint256 amount);
     event CampaignSuccessful(uint256 campaignId, uint256 productNFTId);
     event CampaignFailed(uint256 campaignId);
@@ -63,17 +75,37 @@ contract Crowdfunding {
         _;
     }
 
-    function initializeCampaign(uint256 targetAmount, uint256 deadline) external {
-        // require(deadline > block.timestamp, "Invalid deadline");
+    function initializeCampaign(
+        uint256 targetAmount, 
+        uint256 deadline,
+        string memory creatorName,
+        string memory twitterHandle,
+        string memory projectName,
+        string memory projectDescription
+    ) external {
         require(targetAmount > 0, "Target amount must be greater than 0");
+        require(bytes(creatorName).length > 0, "Creator name cannot be empty");
+        require(bytes(projectName).length > 0, "Project name cannot be empty");
 
         campaignCount++;
         Campaign storage campaign = campaigns[campaignCount];
         campaign.creator = msg.sender;
+        campaign.creatorName = creatorName;
+        campaign.twitterHandle = twitterHandle;
+        campaign.projectName = projectName;
+        campaign.projectDescription = projectDescription;
         campaign.targetAmount = targetAmount;
         campaign.deadline = deadline;
 
-        emit CampaignInitialized(campaignCount, msg.sender, targetAmount, deadline);
+        emit CampaignInitialized(
+            campaignCount, 
+            msg.sender, 
+            creatorName,
+            twitterHandle,
+            projectName,
+            targetAmount, 
+            deadline
+        );
     }
 
     function contribute(uint256 campaignId) external payable isActiveCampaign(campaignId) {
@@ -92,7 +124,8 @@ contract Crowdfunding {
 
     function finalizeCampaign(uint256 campaignId) external onlyCreator(campaignId) {
         Campaign storage campaign = campaigns[campaignId];
-        require(block.timestamp > campaign.deadline || campaign.currentAmount >= campaign.targetAmount, "Campaign not eligible for finalization");
+        require(block.timestamp > campaign.deadline || campaign.currentAmount >= campaign.targetAmount, 
+            "Campaign not eligible for finalization");
         require(!campaign.finalized, "Campaign already finalized");
 
         if (campaign.currentAmount >= campaign.targetAmount) {
@@ -102,17 +135,17 @@ contract Crowdfunding {
             uint256 productNFTId = productNFT.mint(campaign.creator, "https://example.com/product-nft.json");
             campaign.productNFTId = productNFTId;
 
-            campaign.totalProductSupply = 1000;
-            campaign.productPrice = 1;
+            // Set initial product details
+            campaign.totalProductSupply = 1000; // Initial supply
+            campaign.productPrice = 1 ether;   // Initial price (1 ETH)
 
-
-            // Fractionalize the ProductNFT
-            uint256 nftTokenId = productNFT.getLastTokenId();  // Assuming you have a method to get the last minted NFT's ID
-            uint256 fractionAmount = 1000;  // Number of fractional tokens
-            fractionalNFTManager.fractionalizeNFT(nftTokenId, fractionAmount);
+            // Calculate contribution percentages and distribute tokens accordingly
+            uint256 totalContributed = campaign.currentAmount;
+            
+            // Fractionalize the ProductNFT and distribute tokens based on contributions
+            fractionalNFTManager.fractionalizeNFT(productNFTId, 1000);  // Create 1000 fractional tokens
 
             emit CampaignSuccessful(campaignId, productNFTId);
-            // TODO: Add NFT minting logic here
         } else {
             emit CampaignFailed(campaignId);
         }
@@ -131,54 +164,44 @@ contract Crowdfunding {
         campaign.totalProductSupply -= amount;
 
         // Get the Fractional NFT details
-        uint256 tokenId = 0; // Assuming the NFT associated with the campaign has tokenId 0
+        uint256 tokenId = campaign.productNFTId; // Use the actual NFT ID from the campaign
         address fractionalNFTAddress = fractionalNFTManager.getFractionalNFT(tokenId);
         FractionalNFTToken fractionalNFTToken = FractionalNFTToken(fractionalNFTAddress);
 
         uint256 fractionalSupply = fractionalNFTToken.fractionalTotalSupply();
         require(fractionalSupply > 0, "No fractional tokens exist");
 
-        // Example assuming product price is a human-readable value (in Ether)
-        require(fractionalSupply == 1000, "Fractional supply is not 1000");
-        require(campaign.productPrice == 1, "Product price is not 1");
-
-        // Convert product price to wei (1 Ether = 1e18 wei)
-        uint256 scaledProductPrice = campaign.productPrice * 1e18;  // 1 Ether becomes 1e18 wei
-
-        // Calculate earnings per token (ensure you're working with values in wei)
-        uint256 earningsPerToken = scaledProductPrice / fractionalSupply;
-
-        // Ensure earnings per token is greater than zero after scaling
+        // Calculate earnings per token (working in wei)
+        uint256 earningsPerToken = msg.value / fractionalSupply;
         require(earningsPerToken > 0, "Earnings per token must be greater than zero");
 
-        // Get all token holders
+        // Get all token holders and distribute earnings
         address[] memory holders = fractionalNFTToken.getHolders();
+        uint256 totalDistributed = 0;
 
-        // Distribute earnings to each holder
         for (uint256 i = 0; i < holders.length; i++) {
             address holder = holders[i];
-            uint256 holderBalance = fractionalNFTToken.balanceOf(holder);
-
-            // Calculate the payout for the holder
-            uint256 payout = holderBalance * earningsPerToken;
-            require(address(this).balance >= payout, "Insufficient funds in contract");
-
-
-            // Check for valid address and ensure payout is greater than zero
-            require(holder != address(0), "Invalid address");
-            require(payout > 0, "No earnings to transfer");
-
-            // Transfer the payout
-            // payable(holder).transfer(payout);
-            // Transfer the payout and check if it is successful
-            (bool success, ) = payable(holder).call{value: payout}("");
-            require(success, "Transfer failed");
-
+            if (holder != address(0)) {
+                uint256 holderBalance = fractionalNFTToken.balanceOf(holder);
+                uint256 payout = holderBalance * earningsPerToken;
+                
+                if (payout > 0 && totalDistributed + payout <= msg.value) {
+                    totalDistributed += payout;
+                    (bool success, ) = payable(holder).call{value: payout}("");
+                    require(success, "Transfer failed");
+                }
+            }
         }
 
-        // Emit event for purchase
-        emit ProductPurchased(campaignId, msg.sender, amount, totalPrice);
+        // Refund any remaining dust amount to the buyer
+        uint256 remaining = msg.value - totalDistributed;
+        if (remaining > 0) {
+            (bool success, ) = payable(msg.sender).call{value: remaining}("");
+            require(success, "Refund transfer failed");
+        }
 
+        emit ProductPurchased(campaignId, msg.sender, amount, totalPrice);
+        emit EarningsDistributed(campaignId, totalDistributed);
     }
 
 
@@ -214,6 +237,10 @@ contract Crowdfunding {
 
     function getCampaignDetails(uint256 campaignId) external view returns (
         address creator,
+        string memory creatorName,
+        string memory twitterHandle,
+        string memory projectName,
+        string memory projectDescription,
         uint256 targetAmount,
         uint256 currentAmount,
         uint256 deadline,
@@ -222,6 +249,10 @@ contract Crowdfunding {
         Campaign storage campaign = campaigns[campaignId];
         return (
             campaign.creator,
+            campaign.creatorName,
+            campaign.twitterHandle,
+            campaign.projectName,
+            campaign.projectDescription,
             campaign.targetAmount,
             campaign.currentAmount,
             campaign.deadline,

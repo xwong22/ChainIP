@@ -44,7 +44,14 @@ describe("Crowdfunding Contract with ProductNFT", function () {
   });
 
   it("should initialize a campaign and link to ProductNFT", async function () {
-    const tx = await crowdfunding.connect(creator).initializeCampaign(targetAmount, deadline);
+    const tx = await crowdfunding.connect(creator).initializeCampaign(
+        ethers.parseEther("10"), // targetAmount (10 ETH)
+        1733961600,              // deadline
+        "John Doe",              // creatorName
+        "@johndoe",             // twitterHandle
+        "My Awesome Project",    // projectName
+        "This is a description of my awesome project" // projectDescription
+    );
     await expect(tx).to.emit(crowdfunding, "CampaignInitialized");
 
     const campaignDetails = await crowdfunding.getCampaignDetails(1);
@@ -56,7 +63,14 @@ describe("Crowdfunding Contract with ProductNFT", function () {
   });
 
   it("should mint a ProductNFT after a successful campaign", async function () {
-    await crowdfunding.connect(creator).initializeCampaign(targetAmount, deadline);
+    await crowdfunding.connect(creator).initializeCampaign(
+        targetAmount,
+        deadline,
+        "John Doe",              // creatorName
+        "@johndoe",             // twitterHandle
+        "My Awesome Project",    // projectName
+        "This is a description of my awesome project" // projectDescription
+    );
 
     // Contributors contribute to meet the target
     await crowdfunding.connect(contributor1).contribute(1, { value: ethers.parseEther("5") });
@@ -74,7 +88,14 @@ describe("Crowdfunding Contract with ProductNFT", function () {
 
   it("should not mint a ProductNFT for failed campaigns", async function () {
     const pastDeadline = Math.floor(Date.now() / 1000) - 3600; // 1 hour ago
-    await crowdfunding.connect(creator).initializeCampaign(targetAmount, pastDeadline);
+    await crowdfunding.connect(creator).initializeCampaign(
+        targetAmount,
+        pastDeadline,
+        "John Doe",
+        "@johndoe",
+        "My Awesome Project",
+        "This is a description of my awesome project"
+    );
 
     // Finalize the campaign
     const finalizeTx = await crowdfunding.connect(creator).finalizeCampaign(1);
@@ -89,7 +110,14 @@ describe("Crowdfunding Contract with ProductNFT", function () {
   });
 
   it("should allow contributions to an active campaign", async function () {
-    await crowdfunding.connect(creator).initializeCampaign(targetAmount, deadline);
+    await crowdfunding.connect(creator).initializeCampaign(
+        targetAmount,
+        deadline,
+        "John Doe",
+        "@johndoe",
+        "My Awesome Project",
+        "This is a description of my awesome project"
+    );
 
     const tx = await crowdfunding.connect(contributor1).contribute(1, { value: oneEther });
     await expect(tx).to.emit(crowdfunding, "ContributionMade").withArgs(1, contributor1.address, oneEther);

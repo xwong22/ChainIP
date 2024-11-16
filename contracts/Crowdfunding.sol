@@ -14,6 +14,10 @@ contract Crowdfunding {
         bool finalized;
         uint256 productNFTId;       // The ID of the minted NFT for this campaign
         mapping(address => uint256) contributions;
+
+        // for selling the productNFT
+        uint256 totalProductSupply;
+        uint256 productPrice;
     }
 
     mapping(uint256 => Campaign) public campaigns;
@@ -33,6 +37,9 @@ contract Crowdfunding {
     event CampaignSuccessful(uint256 campaignId, uint256 productNFTId);
     event CampaignFailed(uint256 campaignId);
     event RefundProcessed(uint256 campaignId, address indexed contributor, uint256 amount);
+    event ProductPurchased(uint256 indexed campaignId, address indexed buyer, uint256 amount, uint256 totalPrice);
+    event EarningsDistributed(uint256 indexed campaignId, uint256 totalEarnings);
+
 
     modifier onlyCreator(uint256 campaignId) {
         require(campaigns[campaignId].creator == msg.sender, "Not the campaign creator");
@@ -97,6 +104,50 @@ contract Crowdfunding {
             emit CampaignFailed(campaignId);
         }
     }
+
+
+    function purchaseProduct(uint256 campaignId, uint256 amount) external payable {
+        Campaign storage campaign = campaigns[campaignId];
+        require(campaign.finalized, "Campaign is not finalized");
+        require(amount > 0, "Amount must be greater than zero");
+        require(campaign.totalProductSupply >= amount, "Not enough products available");
+
+        uint256 totalPrice = amount * campaign.productPrice;
+        require(msg.value >= totalPrice, "Insufficient payment");
+
+        campaign.totalProductSupply -= amount;
+
+        // Get the Fractional NFT details
+        uint256 tokenId = 0; // Assuming the NFT associated with the campaign has tokenId 0
+        address fractionalNFTAddress = fractionalNFTManager.getFractionalNFT(tokenId);
+        FractionalNFTToken fractionalNFTToken = FractionalNFTToken(fractionalNFTAddress);
+
+        uint256 fractionalSupply = fractionalNFTToken.fractionalTotalSupply();
+        require(fractionalSupply > 0, "No fractional tokens exist");
+
+        // Calculate earnings per token
+        uint256 earningsPerToken = campaign.productPrice / fractionalSupply;
+
+        // Get all token holders
+        address[] memory holders = fractionalNFTToken.getHolders();
+
+        // Distribute earnings to each holder
+        for (uint256 i = 0; i < holders.length; i++) {
+            address holder = holders[i];
+            uint256 holderBalance = fractionalNFTToken.balanceOf(holder);
+
+            // Calculate the payout for the holder
+            uint256 payout = holderBalance * earningsPerToken;
+
+            // Transfer the payout
+            (bool success, ) = holder.call{value: payout}("");
+            require(success, "Earnings transfer failed");
+        }
+
+        // Emit event for purchase
+        emit ProductPurchased(campaignId, msg.sender, amount, totalPrice);
+    }
+
 
     // function mintProductNFT(uint256 campaignId) private returns (uint256) {
     //     Campaign storage campaign = campaigns[campaignId];

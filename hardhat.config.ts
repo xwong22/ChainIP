@@ -11,13 +11,18 @@ const config: HardhatUserConfig = {
 
   networks: {
     hardhat: {
-      chainId: 31337,
+      chainId: 1337,
     },
-    "linea-sepolia": {
-      url: "https://rpc.sepolia.linea.build",
+    // "linea-sepolia": {
+    //   url: "https://rpc.sepolia.linea.build",
+    //   accounts: [PRIVATE_KEY],
+    //   chainId: 59141
+    // },
+    "scroll-sepolia": {
+      url: process.env.SCROLL_SEPOLIA_RPC_URL,
       accounts: [PRIVATE_KEY],
-      chainId: 59141
-    },
+      chainId: 534351
+    }
   },
 };
 

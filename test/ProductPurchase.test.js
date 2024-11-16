@@ -64,9 +64,17 @@ describe("Crowdfunding - Product Purchase and Earnings Distribution", function (
     // Get fractional NFT address
     const fractionalNFTAddress = await fractionalNFTManager.getFractionalNFT(tokenId);
     fractionalNFTToken = await ethers.getContractAt("FractionalNFTToken", fractionalNFTAddress);
+
+
+    
   });
 
   it("should allow product purchase and distribute earnings to fractional token holders", async function () {
+    // Store initial balances BEFORE the purchase
+    const initialBalance1 = await ethers.provider.getBalance(holder1.address);
+    const initialBalance2 = await ethers.provider.getBalance(holder2.address);
+    const initialBalance3 = await ethers.provider.getBalance(holder3.address);
+
     // Debug: Check token distribution
     console.log("\nToken Distribution:");
     console.log("Holder1 tokens:", (await fractionalNFTToken.balanceOf(holder1.address)).toString());
@@ -99,9 +107,9 @@ describe("Crowdfunding - Product Purchase and Earnings Distribution", function (
     const finalBalance3 = await ethers.provider.getBalance(holder3.address);
 
     // Verify balance changes
-    expect(finalBalance1).to.be.gt(initialBalance1); // Holder1 should receive 50%
-    expect(finalBalance2).to.be.gt(initialBalance2); // Holder2 should receive 30%
-    expect(finalBalance3).to.be.gt(initialBalance3); // Holder3 should receive 20%
+    expect(finalBalance1).to.be.gt(initialBalance1);
+    expect(finalBalance2).to.be.gt(initialBalance2);
+    expect(finalBalance3).to.be.gt(initialBalance3);
 
     // Verify the remaining product supply
     const campaign = await crowdfunding.campaigns(campaignId);

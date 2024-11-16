@@ -18,6 +18,7 @@ contract Crowdfunding {
         bool finalized;
         uint256 productNFTId;       // The ID of the minted NFT for this campaign
         mapping(address => uint256) contributions;
+        address[] contributorList;  // New field to track unique contributors
 
         // for selling the productNFT
         uint256 totalProductSupply;
@@ -86,9 +87,12 @@ contract Crowdfunding {
         require(targetAmount > 0, "Target amount must be greater than 0");
         require(bytes(creatorName).length > 0, "Creator name cannot be empty");
         require(bytes(projectName).length > 0, "Project name cannot be empty");
+        require(deadline > block.timestamp, "Deadline must be in the future");
 
         campaignCount++;
         Campaign storage campaign = campaigns[campaignCount];
+        
+        // Initialize basic campaign details
         campaign.creator = msg.sender;
         campaign.creatorName = creatorName;
         campaign.twitterHandle = twitterHandle;
@@ -96,6 +100,15 @@ contract Crowdfunding {
         campaign.projectDescription = projectDescription;
         campaign.targetAmount = targetAmount;
         campaign.deadline = deadline;
+        campaign.currentAmount = 0;
+        campaign.finalized = false;
+        
+        // Initialize product-related fields
+        campaign.totalProductSupply = 0;
+        campaign.productPrice = 0;
+        
+        // Initialize empty contributor list
+        delete campaign.contributorList;
 
         emit CampaignInitialized(
             campaignCount, 
@@ -111,6 +124,11 @@ contract Crowdfunding {
     function contribute(uint256 campaignId) external payable isActiveCampaign(campaignId) {
         Campaign storage campaign = campaigns[campaignId];
         require(msg.value > 0, "Contribution must be greater than 0");
+
+        // If this is their first contribution, add them to the contributor list
+        if (campaign.contributions[msg.sender] == 0) {
+            campaign.contributorList.push(msg.sender);
+        }
 
         campaign.currentAmount += msg.value;
         campaign.contributions[msg.sender] += msg.value;
@@ -139,16 +157,36 @@ contract Crowdfunding {
             campaign.totalProductSupply = 1000; // Initial supply
             campaign.productPrice = 1 ether;   // Initial price (1 ETH)
 
-            // Calculate contribution percentages and distribute tokens accordingly
-            uint256 totalContributed = campaign.currentAmount;
-            
-            // Fractionalize the ProductNFT and distribute tokens based on contributions
+            // Fractionalize the ProductNFT
             fractionalNFTManager.fractionalizeNFT(productNFTId, 1000);  // Create 1000 fractional tokens
+            address fractionalNFTAddress = fractionalNFTManager.getFractionalNFT(productNFTId);
+            FractionalNFTToken fractionalNFTToken = FractionalNFTToken(fractionalNFTAddress);
+
+            // Get all contributors and their contributions
+            address[] memory contributors = getContributors(campaignId);
+            for (uint256 i = 0; i < contributors.length; i++) {
+                address contributor = contributors[i];
+                if (contributor != address(0)) {
+                    uint256 contribution = campaign.contributions[contributor];
+                    if (contribution > 0) {
+                        // Calculate share amount based on contribution percentage
+                        uint256 shareAmount = (contribution * 1000) / campaign.currentAmount;
+                        if (shareAmount > 0) {
+                            fractionalNFTToken.mintShares(contributor, shareAmount);
+                        }
+                    }
+                }
+            }
 
             emit CampaignSuccessful(campaignId, productNFTId);
         } else {
             emit CampaignFailed(campaignId);
         }
+    }
+
+    // Helper function to get all contributors
+    function getContributors(uint256 campaignId) internal view returns (address[] memory) {
+        return campaigns[campaignId].contributorList;
     }
 
 
@@ -164,14 +202,14 @@ contract Crowdfunding {
         campaign.totalProductSupply -= amount;
 
         // Get the Fractional NFT details
-        uint256 tokenId = campaign.productNFTId; // Use the actual NFT ID from the campaign
+        uint256 tokenId = campaign.productNFTId;
         address fractionalNFTAddress = fractionalNFTManager.getFractionalNFT(tokenId);
         FractionalNFTToken fractionalNFTToken = FractionalNFTToken(fractionalNFTAddress);
 
         uint256 fractionalSupply = fractionalNFTToken.fractionalTotalSupply();
         require(fractionalSupply > 0, "No fractional tokens exist");
 
-        // Calculate earnings per token (working in wei)
+        // Calculate earnings per token
         uint256 earningsPerToken = msg.value / fractionalSupply;
         require(earningsPerToken > 0, "Earnings per token must be greater than zero");
 
@@ -183,12 +221,14 @@ contract Crowdfunding {
             address holder = holders[i];
             if (holder != address(0)) {
                 uint256 holderBalance = fractionalNFTToken.balanceOf(holder);
-                uint256 payout = holderBalance * earningsPerToken;
-                
-                if (payout > 0 && totalDistributed + payout <= msg.value) {
-                    totalDistributed += payout;
-                    (bool success, ) = payable(holder).call{value: payout}("");
-                    require(success, "Transfer failed");
+                if (holderBalance > 0) {  // Only process holders with tokens
+                    uint256 payout = holderBalance * earningsPerToken;
+                    
+                    if (payout > 0 && totalDistributed + payout <= msg.value) {
+                        totalDistributed += payout;
+                        (bool success, ) = payable(holder).call{value: payout}("");
+                        require(success, "Transfer failed");
+                    }
                 }
             }
         }

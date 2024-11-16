@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+
+import "./ProductNFT.sol";  // Import the ProductNFT contract
+import "./FractionalNFTManager.sol";
+
 contract Crowdfunding {
     struct Campaign {
         address creator;
@@ -8,15 +12,25 @@ contract Crowdfunding {
         uint256 currentAmount;
         uint256 deadline;
         bool finalized;
+        uint256 productNFTId;       // The ID of the minted NFT for this campaign
         mapping(address => uint256) contributions;
     }
 
     mapping(uint256 => Campaign) public campaigns;
     uint256 public campaignCount;
 
+    ProductNFT public productNFT;
+    FractionalNFTManager public fractionalNFTManager;
+
+    // Constructor to accept the ProductNFT and FractionalNFTManager addresses
+    constructor(address _productNFTAddress, address _fractionalNFTManagerAddress) {
+        productNFT = ProductNFT(_productNFTAddress);
+        fractionalNFTManager = FractionalNFTManager(_fractionalNFTManagerAddress);
+    }
+
     event CampaignInitialized(uint256 campaignId, address indexed creator, uint256 targetAmount, uint256 deadline);
     event ContributionMade(uint256 campaignId, address indexed contributor, uint256 amount);
-    event CampaignSuccessful(uint256 campaignId);
+    event CampaignSuccessful(uint256 campaignId, uint256 productNFTId);
     event CampaignFailed(uint256 campaignId);
     event RefundProcessed(uint256 campaignId, address indexed contributor, uint256 amount);
 
@@ -55,7 +69,7 @@ contract Crowdfunding {
         emit ContributionMade(campaignId, msg.sender, msg.value);
 
         if (campaign.currentAmount >= campaign.targetAmount) {
-            emit CampaignSuccessful(campaignId);
+            emit CampaignSuccessful(campaignId, campaign.productNFTId);
         }
     }
 
@@ -66,12 +80,35 @@ contract Crowdfunding {
 
         if (campaign.currentAmount >= campaign.targetAmount) {
             campaign.finalized = true;
-            emit CampaignSuccessful(campaignId);
+
+            // Mint the NFT
+            uint256 productNFTId = productNFT.mint(campaign.creator, "https://example.com/product-nft.json");
+            campaign.productNFTId = productNFTId;
+
+
+            // Fractionalize the ProductNFT
+            uint256 nftTokenId = productNFT.getLastTokenId();  // Assuming you have a method to get the last minted NFT's ID
+            uint256 fractionAmount = 1000;  // Number of fractional tokens
+            fractionalNFTManager.fractionalizeNFT(nftTokenId, fractionAmount);
+
+            emit CampaignSuccessful(campaignId, productNFTId);
             // TODO: Add NFT minting logic here
         } else {
             emit CampaignFailed(campaignId);
         }
     }
+
+    // function mintProductNFT(uint256 campaignId) private returns (uint256) {
+    //     Campaign storage campaign = campaigns[campaignId];
+
+    //     // You can customize metadata based on the campaign details, such as campaign ID, creator, etc.
+    //     string memory campaignMetadata = string(abi.encodePacked("Campaign #", uint2str(campaignId)));
+
+    //     // Call the ProductNFT contract to mint the NFT
+    //     uint256 productNFTId = productNFT.mint(campaign.creator, campaignMetadata);  // Mint NFT for the campaign creator
+    //     return productNFTId;
+    // }
+
 
     function refund(uint256 campaignId) external {
         Campaign storage campaign = campaigns[campaignId];
@@ -106,5 +143,24 @@ contract Crowdfunding {
             campaign.deadline,
             campaign.finalized
         );
+    }
+
+    function uint2str(uint256 _i) internal pure returns (string memory _uintAsString) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len - 1;
+        while (_i != 0) {
+            bstr[k--] = bytes1(uint8(48 + _i % 10));
+            _i /= 10;
+        }
+        return string(bstr);
     }
 }

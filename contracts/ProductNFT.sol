@@ -16,4 +16,8 @@ contract ProductNFT is ERC721URIStorage, Ownable {
 
         return tokenId;
     }
+
+    function getLastTokenId() public view returns (uint256) {
+        return nextTokenId - 1;
+    }
 }
